@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>XAI 聊天机器人</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #343541;
+        }
+        
+        #apiKeyModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        #chatContainer {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #chatHistory {
+            flex-grow: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        
+        .user-message {
+            background-color: #444654;
+            color: white;
+        }
+        
+        .bot-message {
+            background-color: #343541;
+            color: white;
+        }
+        
+        #inputContainer {
+            display: flex;
+            gap: 10px;
+        }
+        
+        #userInput {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #565869;
+            border-radius: 5px;
+            background-color: #40414f;
+            color: white;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background-color: #565869;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #444654;
+        }
+    </style>
+</head>
+<body>
+    <div id="apiKeyModal">
+        <div class="modal-content">
+            <h2>请输入您的 XAI API Key</h2>
+            <input type="password" id="apiKeyInput" placeholder="输入 API Key">
+            <button onclick="saveApiKey()">确认</button>
+        </div>
+    </div>
+    
+    <div id="chatContainer">
+        <div id="chatHistory"></div>
+        <div id="inputContainer">
+            <input type="text" id="userInput" placeholder="输入消息...">
+            <button onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+
+    <script>
+        let apiKey = '';
+        let messageHistory = [];
+        
+        function saveApiKey() {
+            apiKey = document.getElementById('apiKeyInput').value;
+            if (apiKey) {
+                document.getElementById('apiKeyModal').style.display = 'none';
+            } else {
+                alert('请输入有效的 API Key');
+            }
+        }
+        
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput');
+            const message = userInput.value.trim();
+            if (!message) return;
+            
+            // 添加用户消息到界面
+            addMessageToChat('user', message);
+            userInput.value = '';
+            
+            // 更新消息历史
+            messageHistory.push({ role: "user", content: message });
+            
+            try {
+                const response = await fetch('https://api.x.ai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "grok-beta",
+                        messages: messageHistory
+                    })
+                });
+                
+                const data = await response.json();
+                const botResponse = data.choices[0].message.content;
+                
+                // 添加机器人回复到界面
+                addMessageToChat('bot', botResponse);
+                
+                // 更新消息历史
+                messageHistory.push({ role: "assistant", content: botResponse });
+                
+            } catch (error) {
+                console.error('Error:', error);
+                addMessageToChat('bot', '抱歉，发生错误，请稍后重试。');
+            }
+        }
+        
+        function addMessageToChat(role, content) {
+            const chatHistory = document.getElementById('chatHistory');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            messageDiv.textContent = content;
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+        
+        // 支持按回车发送消息
+        document.getElementById('userInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

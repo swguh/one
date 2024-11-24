@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>XAI 聊天机器人</title>
+    <style>
+        body {
+            margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #343541; color: white;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;
+        }
+        #chatHistory { width: 80%; height: 70%; overflow-y: auto; margin-bottom: 10px; }
+        #inputContainer { display: flex; width: 80%; gap: 10px; }
+        input, button { padding: 10px; border: none; border-radius: 5px; }
+        input { flex-grow: 1; }
+        button { background-color: #565869; color: white; cursor: pointer; }
+        button:hover { background-color: #444654; }
+    </style>
+</head>
+<body>
+    <div id="chatHistory"></div>
+    <div id="inputContainer">
+        <input type="text" id="userInput" placeholder="输入消息..." onkeypress="if(event.key==='Enter') sendMessage()">
+        <button onclick="sendMessage()">发送</button>
+    </div>
+
+    <script>
+        const apiKey = "YOUR_API_KEY_HERE"; // 替換為實際 API Key
+        const messageHistory = [];
+
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput');
+            const message = userInput.value.trim();
+            if (!message) return;
+            addMessageToChat('user', message);
+            userInput.value = '';
+            messageHistory.push({ role: "user", content: message });
+
+            try {
+                const response = await fetch('https://api.x.ai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({ model: "grok-beta", messages: messageHistory })
+                });
+                const data = await response.json();
+                const botResponse = data.choices[0].message.content;
+                addMessageToChat('bot', botResponse);
+                messageHistory.push({ role: "assistant", content: botResponse });
+            } catch {
+                addMessageToChat('bot', '抱歉，发生错误。');
+            }
+        }
+
+        function addMessageToChat(role, content) {
+            const chatHistory = document.getElementById('chatHistory');
+            const div = document.createElement('div');
+            div.textContent = content;
+            div.style.margin = '5px 0';
+            div.style.padding = '10px';
+            div.style.borderRadius = '5px';
+            div.style.backgroundColor = role === 'user' ? '#444654' : '#565869';
+            chatHistory.appendChild(div);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+
+以上是聊天AI的API參考
+幫我製作一個IQ100的機智問答，整體介面為機智問答遊戲風格，嘗試使用emoji當作小圖示使用
+遊戲有幾個狀態機如下初始為「輸入API KEY狀態」
+輸入API KEY狀態
+	請使用者輸入api key，輸入之後進入開戲開始畫面狀態
+開戲開始畫面狀態：
+   顯示一個按鈕「開始」
+   按下開始之後進入AI生成題目狀態
+AI生成題目狀態：
+	顯示AI思考中
+	整理之前出過的題目為一個文字
+	傳送Prompt給xAI：
+		請生成一個小學生的百科知識問答題目，格式如下：
+		{
+		    "question": "問題內容",
+		    "options": {
+		        "A": "選項A",
+		        "B": "選項B",
+		        "C": "選項C",
+		        "D": "選項D"
+		    },
+		    "answer": "正確答案字母"
+		}
+		請只返回純JSON格式，不要加入其他文字。
+		這是之前出過的題目請不要重複
+		
+	把收到訊息的內容時先在console列印出來
+	回傳的內容不是純JSON格式我們需要解析
+	內容去除 Markdown格式
+	再把JSON文字過濾出來
+	如果分析成功進入答題狀態
+	如果分析失敗把回傳的內容與分析錯誤顯示在畫面上並給一個按鈕叫做「再生成」
+	按下「再生成」再度產生一個新題目
+答題狀態：
+	把題目顯示出來
+	選項做成按鈕需要有互動性，點擊要有儀式感
+	答對需要有大量的大顆星星爆炸增加儀式感，在分數上加10
+	答錯時振動畫面激烈一點 將正確答案匡起來  沒有得分
+	答完題目 如果已經十題進入遊戲結束狀態
+	如果還沒到達十題 回到AI生成題目狀態
+遊戲結束狀態：
+	顯示分數與回到首頁的按鈕
+	
+
+
+請先一步一步分析，然後給出詳細完整的沒有省略的程式碼

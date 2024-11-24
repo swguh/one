@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>物理物件生成器</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 16px;
+            font-family: Arial;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">物體數量: 0 | FPS: 0</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script>
+        const Engine = Matter.Engine,
+            Render = Matter.Render,
+            Runner = Matter.Runner,
+            Bodies = Matter.Bodies,
+            Composite = Matter.Composite,
+            Common = Matter.Common;
+
+        // 創建引擎
+        const engine = Engine.create();
+        
+        // 創建渲染器
+        const render = Render.create({
+            element: document.body,
+            engine: engine,
+            options: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                wireframes: false
+            }
+        });
+
+        // 創建邊界
+        const walls = [
+            Bodies.rectangle(window.innerWidth/2, 0, window.innerWidth, 60, { isStatic: true }),
+            Bodies.rectangle(window.innerWidth/2, window.innerHeight, window.innerWidth, 60, { isStatic: true }),
+            Bodies.rectangle(0, window.innerHeight/2, 60, window.innerHeight, { isStatic: true }),
+            Bodies.rectangle(window.innerWidth, window.innerHeight/2, 60, window.innerHeight, { isStatic: true })
+        ];
+        Composite.add(engine.world, walls);
+
+        // 開始渲染和運行
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // FPS計算
+        let frameCount = 0;
+        let fps = 0;
+        let lastTime = performance.now();
+
+        function calculateFPS() {
+            const currentTime = performance.now();
+            frameCount++;
+            
+            if (currentTime - lastTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+            
+            requestAnimationFrame(calculateFPS);
+            document.getElementById('info').textContent = 
+                `物體數量: ${engine.world.bodies.length - 4} | FPS: ${fps}`;
+        }
+        calculateFPS();
+
+        // 生成隨機形狀
+        function createRandomBody(x, y) {
+            const size = Common.random(20, 50);
+            const shapes = [
+                () => Bodies.rectangle(x, y, size, size, {
+                    render: { fillStyle: `hsl(${Common.random(0, 360)}, 100%, 50%)` }
+                }),
+                () => Bodies.circle(x, y, size/2, {
+                    render: { fillStyle: `hsl(${Common.random(0, 360)}, 100%, 50%)` }
+                }),
+                () => Bodies.polygon(x, y, Common.random(3, 8), size/2, {
+                    render: { fillStyle: `hsl(${Common.random(0, 360)}, 100%, 50%)` }
+                }),
+                () => Bodies.trapezoid(x, y, size, size, 0.5, {
+                    render: { fillStyle: `hsl(${Common.random(0, 360)}, 100%, 50%)` }
+                })
+            ];
+            
+            return shapes[Math.floor(Math.random() * shapes.length)]();
+        }
+
+        // 滑鼠事件處理
+        let interval;
+        let mouseX, mouseY;
+
+        // 追蹤滑鼠位置
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // 左鍵
+                interval = setInterval(() => {
+                    const body = createRandomBody(mouseX, mouseY);
+                    Composite.add(engine.world, body);
+                }, 100); // 每秒10個 (1000ms/10 = 100ms)
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            clearInterval(interval);
+        });
+
+        // 視窗大小調整
+        window.addEventListener('resize', () => {
+            render.canvas.width = window.innerWidth;
+            render.canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

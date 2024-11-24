@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>月亮動畫</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0a0a2a;
+            cursor: none;
+        }
+
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            animation: twinkle 1.5s infinite alternate;
+        }
+
+        .earth {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            font-size: 300px;
+            transform: translate(-50%, -50%);
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .moon {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            user-select: none;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: z-index 0.1s;
+            background-image: url('./image/station1.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .hint-text {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            user-select: none;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0.2; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="earth" class="earth">🌍</div>
+    <div id="moon" class="moon"></div>
+    <audio id="bgMusic" loop>
+        <source src="./music/阳光下的背影.mp3" type="audio/mp3">
+    </audio>
+    <div class="hint-text">點擊畫面播放音樂</div>
+
+    <script>
+        // 創建星星
+        function createStars() {
+            const numberOfStars = 200;
+            for (let i = 0; i < numberOfStars; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.width = (Math.random() * 3 + 2) + 'px';
+                star.style.height = star.style.width;
+                star.style.animationDelay = Math.random() * 2 + 's';
+                document.body.appendChild(star);
+            }
+        }
+
+        // 地球動畫
+        const earthPhases = ['🌍', '🌎', '🌏'];
+        let currentEarthPhase = 0;
+        const earth = document.getElementById('earth');
+
+        function changeEarthPhase() {
+            currentEarthPhase = (currentEarthPhase + 1) % earthPhases.length;
+            earth.textContent = earthPhases[currentEarthPhase];
+        }
+
+        // 修改滑鼠移動事件
+        document.addEventListener('mousemove', (e) => {
+            const screenCenterY = window.innerHeight / 2;
+            moon.style.left = e.clientX + 'px';
+            moon.style.top = e.clientY + 'px';
+            
+            // 當月亮在螢幕下半部，月亮在地球下面
+            if (e.clientY > screenCenterY) {
+                moon.style.zIndex = -1;
+                earth.style.zIndex = 1;
+            } else {
+                // 當月亮在螢幕上半部，月亮在地球上面
+                moon.style.zIndex = 1;
+                earth.style.zIndex = -1;
+            }
+        });
+
+        // 添加音樂控制
+        const bgMusic = document.getElementById('bgMusic');
+        document.addEventListener('click', () => {
+            if (bgMusic.paused) {
+                bgMusic.play();
+                document.querySelector('.hint-text').style.display = 'none';
+            }
+        });
+
+        // 初始化
+        createStars();
+        setInterval(changeEarthPhase, 1000); // 地球每秒轉動一次
+    </script>
+</body>
+</html>

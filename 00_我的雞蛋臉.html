@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>簡易人臉偵測</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+        }
+        #webcam {
+            position: absolute;
+            width: 1280px;
+            height: 720px;
+            transform: rotateY(180deg);
+        }
+        #output_canvas {
+            position: absolute;
+            width: 1280px;
+            height: 720px;
+            transform: rotateY(180deg);
+        }
+        #status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        .egg-eye {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            background-image: url('https://em-content.zobj.net/source/microsoft-teams/337/cooking_1f373.png');
+            background-size: contain;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">系統狀態: 初始化中...</div>
+    <div class="container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <script type="module">
+        import vision from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
+        const { FaceLandmarker, FilesetResolver, DrawingUtils } = vision;
+
+        const statusDiv = document.getElementById('status');
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('output_canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let faceLandmarker;
+        let drawingUtils;
+        let webcamRunning = false;
+        let lastVideoTime = -1;
+
+        // 添加新的變量
+        let particles = [];
+        const PARTICLE_COUNT = 20; // 每秒產生的星星數
+        let lastParticleTime = 0;
+        
+        // 星星粒子類
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 8;  // 減小水平速度
+                this.vy = -10 - Math.random() * 5;    // 調整垂直速度
+                this.alpha = 1;
+                this.size = 10 + Math.random() * 10;  // 調整星星大小
+            }
+
+            update() {
+                this.x += this.vx;
+                this.vy += 0.5;  // 減小重力
+                this.y += this.vy;
+                this.alpha -= 0.01;  // 降低消失速度
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = '#FFD700';  // 使用金黃色
+                this.drawStar(ctx);
+                ctx.restore();
+            }
+
+            drawStar(ctx) {
+                const spikes = 5;
+                const outerRadius = this.size;
+                const innerRadius = this.size / 2;
+
+                ctx.beginPath();
+                for (let i = 0; i < spikes * 2; i++) {
+                    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                    const angle = (i * Math.PI) / spikes;
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        // 設置狀態顯示
+        function setStatus(message) {
+            statusDiv.textContent = `系統狀態: ${message}`;
+        }
+
+        // 錯誤處理
+        function handleError(error) {
+            setStatus(`錯誤: ${error.message}`);
+            console.error(error);
+        }
+
+        // 初始化 FaceLandmarker
+        async function initializeFaceLandmarker() {
+            try {
+                setStatus("載入模型中...");
+                const filesetResolver = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+                );
+                
+                faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+                    baseOptions: {
+                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+                        delegate: "GPU"
+                    },
+                    outputFaceBlendshapes: true,
+                    runningMode: "VIDEO",
+                    numFaces: 1
+                });
+                
+                drawingUtils = new DrawingUtils(ctx);
+                setStatus("模型載入完成");
+                startCamera();
+            } catch (error) {
+                handleError(error);
+            }
+        }
+
+        // 啟動攝影機
+        async function startCamera() {
+            try {
+                setStatus("啟動攝影機中...");
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: 1280,
+                        height: 720
+                    }
+                });
+                
+                video.srcObject = stream;
+                video.addEventListener('loadeddata', predictWebcam);
+                webcamRunning = true;
+                setStatus("攝影機運作中");
+            } catch (error) {
+                handleError(error);
+            }
+        }
+
+        // 預測和繪製
+        async function predictWebcam() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            try {
+                if (lastVideoTime !== video.currentTime) {
+                    lastVideoTime = video.currentTime;
+                    const startTimeMs = performance.now();
+                    const results = faceLandmarker.detectForVideo(video, startTimeMs);
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    if (results.faceLandmarks) {
+                        for (const landmarks of results.faceLandmarks) {
+                            // 修改嘴巴檢測點的索引和閾值
+                            const upperLip = landmarks[13];  // 上唇中心
+                            const lowerLip = landmarks[14];  // 下唇中心
+                            const mouthDistance = Math.abs(upperLip.y - lowerLip.y);
+                            const mouthOpen = mouthDistance > 0.03; // 降低閾值使其更容易觸發
+                            
+                            // 添加除錯信息
+                            console.log('Mouth distance:', mouthDistance);
+                            console.log('Mouth open:', mouthOpen);
+                            
+                            // 如果嘴巴張開，添加新的星星
+                            if (mouthOpen) {
+                                const now = Date.now();
+                                if (now - lastParticleTime > 1000 / PARTICLE_COUNT) {
+                                    const mouthX = (upperLip.x + lowerLip.x) / 2 * canvas.width;
+                                    const mouthY = (upperLip.y + lowerLip.y) / 2 * canvas.height;
+                                    particles.push(new Particle(mouthX, mouthY));
+                                    lastParticleTime = now;
+                                    console.log('Created new particle at:', mouthX, mouthY); // 除錯信息
+                                }
+                            }
+
+                            // 重置全局透明度為 1，確保眼睛完全不透明
+                            ctx.globalAlpha = 1.0;
+                            
+                            // 繪製煎蛋眼睛
+                            const leftEye = landmarks[159];
+                            const rightEye = landmarks[386];
+                            drawEgg(leftEye.x * canvas.width, leftEye.y * canvas.height);
+                            drawEgg(rightEye.x * canvas.width, rightEye.y * canvas.height);
+                        }
+                    }
+
+                    // 確保粒子的更新和繪製在這裡執行
+                    particles = particles.filter(p => p.alpha > 0);
+                    for (let particle of particles) {
+                        particle.update();
+                        particle.draw(ctx);
+                    }
+                }
+            } catch (error) {
+                handleError(error);
+            }
+
+            if (webcamRunning) {
+                window.requestAnimationFrame(predictWebcam);
+            }
+        }
+
+        // 添加繪製煎蛋的函數
+        function drawEgg(x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.globalAlpha = 1.0;
+            ctx.drawImage(eggImage, -75, -75, 150, 150);
+            ctx.restore();
+        }
+
+        // 預加載煎蛋圖片
+        const eggImage = new Image();
+        eggImage.src = 'https://em-content.zobj.net/source/microsoft-teams/337/cooking_1f373.png';
+        
+        // 啟動程式
+        initializeFaceLandmarker();
+    </script>
+</body>
+</html>

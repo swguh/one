@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>球球碰撞遊戲</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        .menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+        }
+        #start-btn {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #3498db;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #timer {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 24px;
+        }
+        #drawing-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="timer"></div>
+        <div id="start-menu" class="menu">
+            <button id="start-btn">開始遊戲</button>
+        </div>
+        <div id="end-menu" class="menu" style="display: none;">
+            <h1 id="result"></h1>
+            <h2 id="score"></h2>
+            <p>3秒後重新開始...</p>
+        </div>
+        <canvas id="drawing-canvas"></canvas>
+    </div>
+
+    <script>
+        const GameState = {
+            START: 'start',
+            PLAYING: 'playing',
+            END: 'end'
+        };
+
+        let currentState = GameState.START;
+        let engine, render, blueBall, redBall, timeLeft, score;
+        const startMenu = document.getElementById('start-menu');
+        const endMenu = document.getElementById('end-menu');
+        const timerElement = document.getElementById('timer');
+        let drawCanvas, drawCtx;
+        let isDrawing = false;
+        let points = [];
+
+        // 初始化Matter.js
+        function initGame() {
+            engine = Matter.Engine.create();
+            render = Matter.Render.create({
+                element: document.getElementById('game-container'),
+                engine: engine,
+                options: {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    wireframes: false,
+                    background: '#2c3e50'
+                }
+            });
+
+            // 創建邊界
+            const walls = [
+                Matter.Bodies.rectangle(window.innerWidth/2, 0, window.innerWidth, 60, { isStatic: true }),
+                Matter.Bodies.rectangle(window.innerWidth/2, window.innerHeight, window.innerWidth, 60, { isStatic: true }),
+                Matter.Bodies.rectangle(0, window.innerHeight/2, 60, window.innerHeight, { isStatic: true }),
+                Matter.Bodies.rectangle(window.innerWidth, window.innerHeight/2, 60, window.innerHeight, { isStatic: true })
+            ];
+
+            // 創建球
+            blueBall = Matter.Bodies.circle(100, window.innerHeight/2, 25, {
+                render: { fillStyle: '#3498db' }
+            });
+            redBall = Matter.Bodies.circle(window.innerWidth-100, window.innerHeight/2, 25, {
+                render: { fillStyle: '#e74c3c' }
+            });
+
+            Matter.World.add(engine.world, [...walls, blueBall, redBall]);
+            Matter.Engine.run(engine);
+            Matter.Render.run(render);
+
+            // 初始化畫布
+            drawCanvas = document.getElementById('drawing-canvas');
+            drawCanvas.width = window.innerWidth;
+            drawCanvas.height = window.innerHeight;
+            drawCtx = drawCanvas.getContext('2d');
+            drawCtx.strokeStyle = 'white';
+            drawCtx.lineWidth = 10;
+            drawCtx.lineCap = 'round';
+            
+            // 添加滑鼠事件
+            drawCanvas.style.pointerEvents = 'auto';
+            drawCanvas.addEventListener('mousedown', startDrawing);
+            drawCanvas.addEventListener('mousemove', draw);
+            drawCanvas.addEventListener('mouseup', endDrawing);
+        }
+
+        function startGame() {
+            // 移除之前的事件監聽器
+            document.getElementById('start-btn').removeEventListener('click', startGame);
+            
+            currentState = GameState.PLAYING;
+            startMenu.style.display = 'none';
+            endMenu.style.display = 'none';
+            timeLeft = 30;
+            updateTimer();
+            initGame();
+
+            // 碰撞檢測
+            Matter.Events.on(engine, 'collisionStart', (event) => {
+                event.pairs.forEach((pair) => {
+                    if ((pair.bodyA === blueBall && pair.bodyB === redBall) ||
+                        (pair.bodyA === redBall && pair.bodyB === blueBall)) {
+                        endGame(true);
+                    }
+                });
+            });
+
+            // 控制藍球移動
+            document.addEventListener('keydown', handleKeyPress);
+        }
+
+        function handleKeyPress(event) {
+            if (currentState !== GameState.PLAYING) return;
+
+            const force = 0.005;
+            switch(event.key) {
+                case 'ArrowUp':
+                    Matter.Body.applyForce(blueBall, blueBall.position, {x: 0, y: -force});
+                    break;
+                case 'ArrowDown':
+                    Matter.Body.applyForce(blueBall, blueBall.position, {x: 0, y: force});
+                    break;
+                case 'ArrowLeft':
+                    Matter.Body.applyForce(blueBall, blueBall.position, {x: -force, y: 0});
+                    break;
+                case 'ArrowRight':
+                    Matter.Body.applyForce(blueBall, blueBall.position, {x: force, y: 0});
+                    break;
+            }
+        }
+
+        function updateTimer() {
+            if (currentState !== GameState.PLAYING) return;
+            
+            timerElement.textContent = `時間: ${timeLeft}秒`;
+            if (timeLeft <= 0) {
+                endGame(false);
+            } else {
+                timeLeft--;
+                setTimeout(updateTimer, 1000);
+            }
+        }
+
+        function endGame(collision) {
+            currentState = GameState.END;
+            document.removeEventListener('keydown', handleKeyPress);
+            
+            const resultElement = document.getElementById('result');
+            const scoreElement = document.getElementById('score');
+            
+            if (collision) {
+                score = timeLeft * 10;
+                resultElement.textContent = "你贏了！";
+            } else {
+                score = 0;
+                resultElement.textContent = "你輸了！";
+            }
+            
+            scoreElement.textContent = `分數: ${score}`;
+            endMenu.style.display = 'block';
+            
+            Matter.World.clear(engine.world);
+            Matter.Engine.clear(engine);
+            Matter.Render.stop(render);
+            render.canvas.remove();
+
+            setTimeout(() => {
+                endMenu.style.display = 'none';
+                startMenu.style.display = 'block';
+                currentState = GameState.START;
+                timerElement.textContent = '';
+                
+                // 重新添加開始按鈕的事件監聽器
+                document.getElementById('start-btn').addEventListener('click', startGame);
+            }, 3000);
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            points = [];
+            const point = { x: e.clientX, y: e.clientY };
+            points.push(point);
+            
+            drawCtx.beginPath();
+            drawCtx.moveTo(point.x, point.y);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const point = { x: e.clientX, y: e.clientY };
+            points.push(point);
+            
+            drawCtx.lineTo(point.x, point.y);
+            drawCtx.stroke();
+        }
+
+        function endDrawing() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            
+            // 過濾點
+            const filteredPoints = filterPoints(points);
+            // 創建矩形
+            createLineBody(filteredPoints);
+            
+            // 清除畫布
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        }
+
+        function filterPoints(points) {
+            if (points.length < 2) return points;
+            
+            const filtered = [points[0]];
+            for (let i = 1; i < points.length; i++) {
+                const dx = points[i].x - filtered[filtered.length-1].x;
+                const dy = points[i].y - filtered[filtered.length-1].y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                
+                if (distance >= 2) {
+                    filtered.push(points[i]);
+                }
+            }
+            return filtered;
+        }
+
+        function createLineBody(points) {
+            if (points.length < 2) return;
+            
+            const bodies = [];
+            for (let i = 0; i < points.length - 1; i++) {
+                const p1 = points[i];
+                const p2 = points[i + 1];
+                
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                const angle = Math.atan2(dy, dx);
+                
+                const rect = Matter.Bodies.rectangle(
+                    (p1.x + p2.x) / 2,
+                    (p1.y + p2.y) / 2,
+                    distance,
+                    10,
+                    {
+                        angle: angle,
+                        render: { fillStyle: 'white' }
+                    }
+                );
+                
+                bodies.push(rect);
+            }
+            
+            const compound = Matter.Body.create({
+                parts: bodies
+            });
+            
+            Matter.World.add(engine.world, compound);
+        }
+
+        document.getElementById('start-btn').addEventListener('click', startGame);
+    </script>
+</body>
+</html>

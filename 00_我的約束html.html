@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Matter.js Emoji約束示範</title>
+    <style>
+        canvas {
+            border: 1px solid #333;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        #emoji-canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="emoji-canvas" width="50" height="50"></canvas>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script>
+        // emoji轉換函數
+        function emojiToURL(emoji, size = 50) {
+            const canvas = document.getElementById('emoji-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, size, size);
+            ctx.font = `${size * 0.8}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, size/2, size/2);
+            return canvas.toDataURL();
+        }
+
+        // 初始化物理引擎
+        const Engine = Matter.Engine,
+            Render = Matter.Render,
+            Runner = Matter.Runner,
+            Bodies = Matter.Bodies,
+            Composite = Matter.Composite,
+            Constraint = Matter.Constraint,
+            MouseConstraint = Matter.MouseConstraint,
+            Mouse = Matter.Mouse;
+
+        const engine = Engine.create();
+        const world = engine.world;
+
+        const render = Render.create({
+            element: document.body,
+            engine: engine,
+            options: {
+                width: window.innerWidth - 40,
+                height: window.innerHeight - 40,
+                wireframes: false,
+                background: '#f0f0f0'
+            }
+        });
+
+        // 創建邊界
+        const ground = Bodies.rectangle(render.canvas.width/2, render.canvas.height, render.canvas.width, 60, { 
+            isStatic: true,
+            render: {
+                fillStyle: '#2c3e50'
+            }
+        });
+        const leftWall = Bodies.rectangle(0, render.canvas.height/2, 60, render.canvas.height, { 
+            isStatic: true,
+            render: {
+                fillStyle: '#2c3e50'
+            }
+        });
+        const rightWall = Bodies.rectangle(render.canvas.width, render.canvas.height/2, 60, render.canvas.height, { 
+            isStatic: true,
+            render: {
+                fillStyle: '#2c3e50'
+            }
+        });
+        const ceiling = Bodies.rectangle(render.canvas.width/2, 0, render.canvas.width, 60, { 
+            isStatic: true,
+            render: {
+                fillStyle: '#2c3e50'
+            }
+        });
+
+        // 彈性約束示範1：兩個方形
+        const box1 = Bodies.rectangle(300, 300, 50, 50, {
+            render: {
+                sprite: {
+                    texture: emojiToURL('🎮')
+                }
+            }
+        });
+        const box2 = Bodies.rectangle(400, 300, 50, 50, {
+            render: {
+                sprite: {
+                    texture: emojiToURL('🎲')
+                }
+            }
+        });
+        const elastic1 = Constraint.create({
+            bodyA: box1,
+            bodyB: box2,
+            stiffness: 0.01,
+            render: {
+                strokeStyle: '#e74c3c',
+                lineWidth: 5
+            }
+        });
+
+        // 彈性約束示範2：圓球和固定點
+        const circle1 = Bodies.circle(500, 300, 25, {
+            render: {
+                sprite: {
+                    texture: emojiToURL('⚽')
+                }
+            }
+        });
+        const elastic2 = Constraint.create({
+            pointA: { x: 500, y: 100 },
+            bodyB: circle1,
+            stiffness: 0.01,
+            render: {
+                strokeStyle: '#3498db',
+                lineWidth: 5
+            }
+        });
+
+        // 剛性約束示範1：兩個圓
+        const bigCircle = Bodies.circle(700, 300, 50, {
+            render: {
+                sprite: {
+                    texture: emojiToURL('🌝')
+                }
+            }
+        });
+        const smallCircle = Bodies.circle(700, 500, 25, {
+            render: {
+                sprite: {
+                    texture: emojiToURL('🌟')
+                }
+            }
+        });
+        const stiff1 = Constraint.create({
+            bodyA: bigCircle,
+            bodyB: smallCircle,
+            length: 200,
+            stiffness: 1,
+            render: {
+                strokeStyle: '#2ecc71',
+                lineWidth: 5
+            }
+        });
+
+        // 剛性約束示範2：圓球和固定點
+        const circle2 = Bodies.circle(900, 300, 25, {
+            render: {
+                sprite: {
+                    texture: emojiToURL('🎾')
+                }
+            }
+        });
+        const stiff2 = Constraint.create({
+            pointA: { x: 900, y: 100 },
+            bodyB: circle2,
+            length: 200,
+            stiffness: 1,
+            render: {
+                strokeStyle: '#9b59b6',
+                lineWidth: 5
+            }
+        });
+
+        // 創建方塊塔
+        const stack = [];
+        const emojis = ['🎯', '🎲', '🎮', '🎨', '🎭', '🎪', '🎫', '🎬', '🎼', '🎧'];
+        for (let i = 0; i < 10; i++) {
+            for (let j = 0; j < 2; j++) {
+                stack.push(
+                    Bodies.rectangle(
+                        render.canvas.width - 150 + j * 50,
+                        render.canvas.height - 30 - i * 50,
+                        40,
+                        40,
+                        {
+                            render: {
+                                sprite: {
+                                    texture: emojiToURL(emojis[i])
+                                }
+                            }
+                        }
+                    )
+                );
+            }
+        }
+
+        // 添加滑鼠控制
+        const mouse = Mouse.create(render.canvas);
+        const mouseConstraint = MouseConstraint.create(engine, {
+            mouse: mouse,
+            constraint: {
+                stiffness: 0.2,
+                render: {
+                    visible: false
+                }
+            }
+        });
+
+        // 將所有物體添加到世界
+        Composite.add(world, [
+            ground, leftWall, rightWall, ceiling,
+            box1, box2, elastic1,
+            circle1, elastic2,
+            bigCircle, smallCircle, stiff1,
+            circle2, stiff2,
+            mouseConstraint,
+            ...stack
+        ]);
+
+        // 運行引擎和渲染器
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // 防止右鍵選單
+        render.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    </script>
+</body>
+</html>
